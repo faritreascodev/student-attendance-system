@@ -13,6 +13,69 @@
         @media print {
             .no-print { display: none; }
         }
+        /* Added toast notification styles */
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 16px 24px;
+            border-radius: 8px;
+            color: white;
+            font-weight: 500;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            animation: slideIn 0.3s ease-out;
+            z-index: 1000;
+            max-width: 400px;
+        }
+        .toast.success { background-color: #10b981; }
+        .toast.error { background-color: #ef4444; }
+        .toast.warning { background-color: #f59e0b; }
+        .toast.info { background-color: #3b82f6; }
+        @keyframes slideIn {
+            from { transform: translateX(400px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes slideOut {
+            from { transform: translateX(0); opacity: 1; }
+            to { transform: translateX(400px); opacity: 0; }
+        }
+        .loading-spinner {
+            border: 3px solid #f3f4f6;
+            border-top: 3px solid #3b82f6;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .tooltip {
+            position: relative;
+            display: inline-block;
+        }
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: 200px;
+            background-color: #1f2937;
+            color: #fff;
+            text-align: center;
+            border-radius: 6px;
+            padding: 8px;
+            position: absolute;
+            z-index: 1;
+            bottom: 125%;
+            left: 50%;
+            margin-left: -100px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            font-size: 12px;
+        }
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
     </style>
 </head>
 <body class="bg-gray-50">
@@ -25,12 +88,25 @@
                     <h1 class="text-xl font-bold text-gray-800">Sistema de Asistencia</h1>
                 </div>
                 <div class="flex space-x-2">
-                    <button onclick="exportData()" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
-                        <i class="fas fa-download mr-2"></i>Exportar Datos
-                    </button>
-                    <button onclick="importData()" class="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700">
-                        <i class="fas fa-upload mr-2"></i>Importar Datos
-                    </button>
+                    <!-- Added tooltips to export/import buttons -->
+                    <div class="tooltip">
+                        <button onclick="exportData()" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
+                            <i class="fas fa-download mr-2"></i>Exportar Datos
+                        </button>
+                        <span class="tooltiptext">Descargar todos los datos en formato JSON</span>
+                    </div>
+                    <div class="tooltip">
+                        <button onclick="importData()" class="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700">
+                            <i class="fas fa-upload mr-2"></i>Importar Datos
+                        </button>
+                        <span class="tooltiptext">Cargar datos desde un archivo JSON</span>
+                    </div>
+                    <div class="tooltip">
+                        <button onclick="clearAllData()" class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">
+                            <i class="fas fa-trash mr-2"></i>Limpiar
+                        </button>
+                        <span class="tooltiptext">Eliminar todos los datos del sistema</span>
+                    </div>
                 </div>
             </div>
             <div class="flex space-x-1 overflow-x-auto pb-2">
@@ -99,6 +175,24 @@
                         </div>
                     </div>
                 </div>
+                <!-- Added quick actions section -->
+                <div class="mt-6 border-t pt-6">
+                    <h3 class="text-lg font-semibold mb-3">Acciones Rápidas</h3>
+                    <div class="flex flex-wrap gap-2">
+                        <button onclick="showTab('attendance')" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+                            <i class="fas fa-clipboard-check mr-2"></i>Registrar Asistencia
+                        </button>
+                        <button onclick="showTab('students'); showStudentModal()" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
+                            <i class="fas fa-user-plus mr-2"></i>Nuevo Estudiante
+                        </button>
+                        <button onclick="showTab('reports'); generateReport()" class="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700">
+                            <i class="fas fa-chart-bar mr-2"></i>Ver Reportes
+                        </button>
+                        <button onclick="exportReportCSV()" class="px-4 py-2 bg-orange-600 text-white rounded hover:bg-orange-700">
+                            <i class="fas fa-file-csv mr-2"></i>Exportar CSV
+                        </button>
+                    </div>
+                </div>
             </div>
 
             <div class="bg-white rounded-lg shadow p-6">
@@ -115,6 +209,17 @@
             <div class="bg-white rounded-lg shadow p-6">
                 <h2 class="text-2xl font-bold mb-6">Registrar Asistencia</h2>
                 
+                <!-- Added current period indicator -->
+                <div id="currentPeriodIndicator" class="mb-4 p-4 bg-blue-50 border-l-4 border-blue-600 rounded hidden">
+                    <div class="flex items-center">
+                        <i class="fas fa-clock text-blue-600 mr-3 text-xl"></i>
+                        <div>
+                            <p class="font-semibold text-blue-900">Periodo Actual</p>
+                            <p class="text-sm text-blue-700" id="currentPeriodText"></p>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                     <div>
                         <label class="block text-sm font-medium mb-2">Curso</label>
@@ -154,14 +259,21 @@
                     </div>
                 </div>
 
-                <div class="mb-4 flex justify-between items-center">
-                    <div class="flex space-x-2">
+                <div class="mb-4 flex justify-between items-center flex-wrap gap-2">
+                    <div class="flex space-x-2 flex-wrap gap-2">
                         <button onclick="markAllAttendance('presente')" class="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700">
                             Marcar Todos Presentes
                         </button>
                         <button onclick="markAllAttendance('ausente')" class="px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700">
                             Marcar Todos Ausentes
                         </button>
+                    </div>
+                    <!-- Added attendance summary counter -->
+                    <div id="attendanceSummary" class="text-sm text-gray-600 hidden">
+                        <span class="mr-3"><i class="fas fa-check-circle text-green-600"></i> <span id="presentCount">0</span> Presentes</span>
+                        <span class="mr-3"><i class="fas fa-times-circle text-red-600"></i> <span id="absentCount">0</span> Ausentes</span>
+                        <span class="mr-3"><i class="fas fa-exclamation-circle text-yellow-600"></i> <span id="justifiedCount">0</span> Justificados</span>
+                        <span><i class="fas fa-user-slash text-orange-600"></i> <span id="escapedCount">0</span> Fugados</span>
                     </div>
                 </div>
 
@@ -178,14 +290,23 @@
             <div class="bg-white rounded-lg shadow p-6">
                 <div class="flex justify-between items-center mb-6">
                     <h2 class="text-2xl font-bold">Gestión de Estudiantes</h2>
-                    <button onclick="showStudentModal()" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
-                        <i class="fas fa-plus mr-2"></i>Nuevo Estudiante
-                    </button>
+                    <div class="flex space-x-2">
+                        <!-- Added bulk actions -->
+                        <button onclick="exportStudentsCSV()" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
+                            <i class="fas fa-file-csv mr-2"></i>Exportar CSV
+                        </button>
+                        <button onclick="showStudentModal()" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+                            <i class="fas fa-plus mr-2"></i>Nuevo Estudiante
+                        </button>
+                    </div>
                 </div>
 
-                <div class="mb-4">
-                    <input type="text" id="studentSearch" placeholder="Buscar estudiante..." 
-                           class="w-full border rounded px-4 py-2" onkeyup="filterStudents()">
+                <div class="mb-4 flex gap-2">
+                    <input type="text" id="studentSearch" placeholder="Buscar por nombre o cédula..." 
+                           class="flex-1 border rounded px-4 py-2" onkeyup="filterStudents()">
+                    <select id="studentCourseFilter" class="border rounded px-4 py-2" onchange="filterStudents()">
+                        <option value="">Todos los cursos</option>
+                    </select>
                 </div>
 
                 <div id="studentsList" class="overflow-x-auto"></div>
@@ -242,7 +363,23 @@
                     </div>
                 </div>
 
-                <div class="flex space-x-2 mb-6">
+                <!-- Added report type selector -->
+                <div class="mb-6">
+                    <label class="block text-sm font-medium mb-2">Tipo de Reporte</label>
+                    <div class="flex space-x-2">
+                        <button onclick="setReportType('general')" id="reportTypeGeneral" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+                            General
+                        </button>
+                        <button onclick="setReportType('byStudent')" id="reportTypeByStudent" class="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400">
+                            Por Estudiante
+                        </button>
+                        <button onclick="setReportType('byCourse')" id="reportTypeByCourse" class="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400">
+                            Por Curso
+                        </button>
+                    </div>
+                </div>
+
+                <div class="flex space-x-2 mb-6 flex-wrap gap-2">
                     <button onclick="generateReport()" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
                         <i class="fas fa-chart-bar mr-2"></i>Generar Reporte
                     </button>
@@ -404,6 +541,20 @@
             </form>
         </div>
     </div>
+
+    <!-- Added footer -->
+    <footer class="bg-white border-t mt-12 py-6 no-print">
+        <div class="max-w-7xl mx-auto px-4 text-center text-gray-600">
+            <p class="text-sm">Sistema de Asistencia Estudiantil v1.0</p>
+            <p class="text-xs mt-2">Desarrollado para la gestión eficiente de asistencia escolar</p>
+            <p class="text-xs mt-1">
+                <i class="fas fa-database mr-1"></i>Datos almacenados localmente en tu navegador
+            </p>
+        </div>
+    </footer>
+
+    <!-- Added toast container -->
+    <div id="toastContainer"></div>
 
     <script src="app.js"></script>
 </body>

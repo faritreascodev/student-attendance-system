@@ -192,6 +192,32 @@ class DataStore {
 // Initialize data store
 const db = new DataStore()
 
+let currentReportType = "general"
+
+function showToast(message, type = "info") {
+  const container = document.getElementById("toastContainer")
+  const toast = document.createElement("div")
+  toast.className = `toast ${type}`
+  toast.innerHTML = `
+    <div class="flex items-center justify-between">
+      <span>${message}</span>
+      <button onclick="this.parentElement.parentElement.remove()" class="ml-4 text-white hover:text-gray-200">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+  `
+  container.appendChild(toast)
+
+  setTimeout(() => {
+    toast.style.animation = "slideOut 0.3s ease-out"
+    setTimeout(() => toast.remove(), 300)
+  }, 5000)
+}
+
+function confirmAction(message) {
+  return confirm(message)
+}
+
 // Navigation
 function showTab(tabName) {
   // Hide all tabs
@@ -217,9 +243,11 @@ function showTab(tabName) {
       break
     case "attendance":
       loadAttendanceTab()
+      updateCurrentPeriod() // Added current period indicator
       break
     case "students":
       loadStudents()
+      loadStudentFilters() // Added filter loading
       break
     case "courses":
       loadCourses()
@@ -230,6 +258,37 @@ function showTab(tabName) {
     case "reports":
       loadReportsTab()
       break
+  }
+}
+
+function updateCurrentPeriod() {
+  const now = new Date()
+  const hours = now.getHours()
+  const minutes = now.getMinutes()
+  const currentTime = hours * 60 + minutes
+
+  const periods = [
+    { period: 1, start: 13 * 60, end: 13 * 60 + 40, label: "1° Periodo (13:00 - 13:40)" },
+    { period: 2, start: 13 * 60 + 40, end: 14 * 60 + 20, label: "2° Periodo (13:40 - 14:20)" },
+    { period: 3, start: 14 * 60 + 20, end: 15 * 60, label: "3° Periodo (14:20 - 15:00)" },
+    { period: 4, start: 15 * 60, end: 15 * 60 + 40, label: "4° Periodo (15:00 - 15:40)" },
+    { period: 5, start: 16 * 60 + 10, end: 16 * 60 + 45, label: "5° Periodo (16:10 - 16:45)" },
+    { period: 6, start: 16 * 60 + 45, end: 17 * 60 + 20, label: "6° Periodo (16:45 - 17:20)" },
+    { period: 7, start: 17 * 60 + 20, end: 17 * 60 + 55, label: "7° Periodo (17:20 - 17:55)" },
+    { period: 8, start: 17 * 60 + 55, end: 18 * 60 + 30, label: "8° Periodo (17:55 - 18:30)" },
+  ]
+
+  const currentPeriod = periods.find((p) => currentTime >= p.start && currentTime <= p.end)
+  const indicator = document.getElementById("currentPeriodIndicator")
+  const text = document.getElementById("currentPeriodText")
+
+  if (currentPeriod) {
+    indicator.classList.remove("hidden")
+    text.textContent = currentPeriod.label
+    document.getElementById("attendancePeriodStart").value = currentPeriod.period
+    document.getElementById("attendancePeriodEnd").value = currentPeriod.period
+  } else {
+    indicator.classList.add("hidden")
   }
 }
 
@@ -351,6 +410,7 @@ function loadStudentsForAttendance() {
 
   if (!courseId) {
     container.innerHTML = ""
+    document.getElementById("attendanceSummary").classList.add("hidden")
     return
   }
 
@@ -358,6 +418,7 @@ function loadStudentsForAttendance() {
 
   if (students.length === 0) {
     container.innerHTML = '<p class="text-gray-500 text-center py-8">No hay estudiantes en este curso.</p>'
+    document.getElementById("attendanceSummary").classList.add("hidden")
     return
   }
 
@@ -382,19 +443,19 @@ function loadStudentsForAttendance() {
                 <td class="border px-4 py-2">${student.name}</td>
                 <td class="border px-4 py-2 text-center">
                     <input type="radio" name="status_${student.id}" value="presente" checked 
-                           class="w-4 h-4 text-green-600">
+                           class="w-4 h-4 text-green-600" onchange="updateAttendanceSummary()">
                 </td>
                 <td class="border px-4 py-2 text-center">
                     <input type="radio" name="status_${student.id}" value="ausente" 
-                           class="w-4 h-4 text-red-600">
+                           class="w-4 h-4 text-red-600" onchange="updateAttendanceSummary()">
                 </td>
                 <td class="border px-4 py-2 text-center">
                     <input type="radio" name="status_${student.id}" value="justificado" 
-                           class="w-4 h-4 text-yellow-600">
+                           class="w-4 h-4 text-yellow-600" onchange="updateAttendanceSummary()">
                 </td>
                 <td class="border px-4 py-2 text-center">
                     <input type="radio" name="status_${student.id}" value="fugado" 
-                           class="w-4 h-4 text-orange-600">
+                           class="w-4 h-4 text-orange-600" onchange="updateAttendanceSummary()">
                 </td>
                 <td class="border px-4 py-2">
                     <input type="text" id="obs_${student.id}" 
@@ -411,12 +472,38 @@ function loadStudentsForAttendance() {
     `
 
   container.innerHTML = html
+  document.getElementById("attendanceSummary").classList.remove("hidden")
+  updateAttendanceSummary()
+}
+
+function updateAttendanceSummary() {
+  const courseId = document.getElementById("attendanceCourse").value
+  if (!courseId) return
+
+  const students = db.students.filter((s) => s.courseId === courseId)
+  let present = 0,
+    absent = 0,
+    justified = 0,
+    escaped = 0
+
+  students.forEach((student) => {
+    const status = document.querySelector(`input[name="status_${student.id}"]:checked`)?.value
+    if (status === "presente") present++
+    else if (status === "ausente") absent++
+    else if (status === "justificado") justified++
+    else if (status === "fugado") escaped++
+  })
+
+  document.getElementById("presentCount").textContent = present
+  document.getElementById("absentCount").textContent = absent
+  document.getElementById("justifiedCount").textContent = justified
+  document.getElementById("escapedCount").textContent = escaped
 }
 
 function markAllAttendance(status) {
   const courseId = document.getElementById("attendanceCourse").value
   if (!courseId) {
-    alert("Por favor seleccione un curso primero.")
+    showToast("Por favor seleccione un curso primero.", "warning")
     return
   }
 
@@ -425,6 +512,8 @@ function markAllAttendance(status) {
     const radio = document.querySelector(`input[name="status_${student.id}"][value="${status}"]`)
     if (radio) radio.checked = true
   })
+  updateAttendanceSummary()
+  showToast(`Todos los estudiantes marcados como ${status}.`, "success")
 }
 
 function saveAttendance() {
@@ -434,16 +523,30 @@ function saveAttendance() {
   const periodEnd = Number.parseInt(document.getElementById("attendancePeriodEnd").value)
 
   if (!courseId || !date) {
-    alert("Por favor complete todos los campos requeridos.")
+    showToast("Por favor complete todos los campos requeridos.", "error")
     return
   }
 
   if (periodStart > periodEnd) {
-    alert("El periodo inicial no puede ser mayor que el periodo final.")
+    showToast("El periodo inicial no puede ser mayor que el periodo final.", "error")
     return
   }
 
   const students = db.students.filter((s) => s.courseId === courseId)
+  const existingAttendance = db.attendance.filter(
+    (a) => a.courseId === courseId && a.date === date && a.periodStart <= periodEnd && a.periodEnd >= periodStart,
+  )
+
+  if (existingAttendance.length > 0) {
+    if (
+      !confirmAction(
+        "Ya existe un registro de asistencia para este curso, fecha y periodo(s). ¿Desea continuar de todos modos?",
+      )
+    ) {
+      return
+    }
+  }
+
   let savedCount = 0
 
   students.forEach((student) => {
@@ -464,21 +567,37 @@ function saveAttendance() {
     }
   })
 
-  alert(`Asistencia guardada exitosamente para ${savedCount} estudiantes.`)
+  showToast(`Asistencia guardada exitosamente para ${savedCount} estudiantes.`, "success")
   document.getElementById("attendanceStudentsList").innerHTML = ""
   document.getElementById("attendanceCourse").value = ""
+  document.getElementById("attendanceSummary").classList.add("hidden")
 }
 
 // Students Functions
+function loadStudentFilters() {
+  const filterSelect = document.getElementById("studentCourseFilter")
+  filterSelect.innerHTML = '<option value="">Todos los cursos</option>'
+  db.courses.forEach((course) => {
+    filterSelect.innerHTML += `<option value="${course.id}">${course.name}</option>`
+  })
+}
+
 function loadStudents() {
   displayStudents(db.students)
 }
 
 function filterStudents() {
   const searchTerm = document.getElementById("studentSearch").value.toLowerCase()
-  const filtered = db.students.filter(
+  const courseFilter = document.getElementById("studentCourseFilter").value
+
+  let filtered = db.students.filter(
     (s) => s.name.toLowerCase().includes(searchTerm) || s.idNumber.toLowerCase().includes(searchTerm),
   )
+
+  if (courseFilter) {
+    filtered = filtered.filter((s) => s.courseId === courseFilter)
+  }
+
   displayStudents(filtered)
 }
 
@@ -587,10 +706,23 @@ function saveStudent(event) {
     phone: document.getElementById("studentPhone").value,
   }
 
+  if (!studentData.name || !studentData.idNumber || !studentData.courseId) {
+    showToast("Por favor complete todos los campos requeridos.", "error")
+    return
+  }
+
+  const duplicate = db.students.find((s) => s.idNumber === studentData.idNumber && s.id !== id)
+  if (duplicate) {
+    showToast("Ya existe un estudiante con esta cédula/ID.", "error")
+    return
+  }
+
   if (id) {
     db.updateStudent(id, studentData)
+    showToast("Estudiante actualizado exitosamente.", "success")
   } else {
     db.createStudent(studentData)
+    showToast("Estudiante creado exitosamente.", "success")
   }
 
   closeStudentModal()
@@ -602,10 +734,32 @@ function editStudent(id) {
 }
 
 function deleteStudentConfirm(id) {
-  if (confirm("¿Está seguro de eliminar este estudiante?")) {
+  if (confirmAction("¿Está seguro de eliminar este estudiante? Esta acción no se puede deshacer.")) {
     db.deleteStudent(id)
+    showToast("Estudiante eliminado exitosamente.", "success")
     loadStudents()
   }
+}
+
+function exportStudentsCSV() {
+  if (db.students.length === 0) {
+    showToast("No hay estudiantes para exportar.", "warning")
+    return
+  }
+
+  let csv = "Nombre,Cédula/ID,Curso,Email,Teléfono\n"
+
+  db.students.forEach((student) => {
+    const course = db.courses.find((c) => c.id === student.courseId)
+    csv += `"${student.name}",`
+    csv += `${student.idNumber},`
+    csv += `"${course?.name || "Sin curso"}",`
+    csv += `${student.email || ""},`
+    csv += `${student.phone || ""}\n`
+  })
+
+  downloadFile(csv, `estudiantes_${new Date().toISOString().split("T")[0]}.csv`, "text/csv")
+  showToast("Estudiantes exportados exitosamente.", "success")
 }
 
 // Courses Functions
@@ -691,10 +845,23 @@ function saveCourse(event) {
     description: document.getElementById("courseDescription").value,
   }
 
+  if (!courseData.name || !courseData.code) {
+    showToast("Por favor complete todos los campos requeridos.", "error")
+    return
+  }
+
+  const duplicate = db.courses.find((c) => c.code === courseData.code && c.id !== id)
+  if (duplicate) {
+    showToast("Ya existe un curso con este código.", "error")
+    return
+  }
+
   if (id) {
     db.updateCourse(id, courseData)
+    showToast("Curso actualizado exitosamente.", "success")
   } else {
     db.createCourse(courseData)
+    showToast("Curso creado exitosamente.", "success")
   }
 
   closeCourseModal()
@@ -708,12 +875,13 @@ function editCourse(id) {
 function deleteCourseConfirm(id) {
   const studentCount = db.students.filter((s) => s.courseId === id).length
   if (studentCount > 0) {
-    alert(`No se puede eliminar el curso porque tiene ${studentCount} estudiantes asignados.`)
+    showToast(`No se puede eliminar el curso porque tiene ${studentCount} estudiantes asignados.`, "error")
     return
   }
 
-  if (confirm("¿Está seguro de eliminar este curso?")) {
+  if (confirmAction("¿Está seguro de eliminar este curso?")) {
     db.deleteCourse(id)
+    showToast("Curso eliminado exitosamente.", "success")
     loadCourses()
   }
 }
@@ -824,10 +992,17 @@ function saveSchedule(event) {
     subject: document.getElementById("scheduleSubject").value,
   }
 
+  if (!scheduleData.courseId || !scheduleData.day || !scheduleData.subject) {
+    showToast("Por favor complete todos los campos requeridos.", "error")
+    return
+  }
+
   if (id) {
     db.updateSchedule(id, scheduleData)
+    showToast("Horario actualizado exitosamente.", "success")
   } else {
     db.createSchedule(scheduleData)
+    showToast("Horario creado exitosamente.", "success")
   }
 
   closeScheduleModal()
@@ -839,13 +1014,31 @@ function editSchedule(id) {
 }
 
 function deleteScheduleConfirm(id) {
-  if (confirm("¿Está seguro de eliminar este horario?")) {
+  if (confirmAction("¿Está seguro de eliminar este horario?")) {
     db.deleteSchedule(id)
+    showToast("Horario eliminado exitosamente.", "success")
     loadSchedules()
   }
 }
 
 // Reports Functions
+function setReportType(type) {
+  currentReportType = type
+
+  // Update button styles
+  document.getElementById("reportTypeGeneral").className =
+    "px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
+  document.getElementById("reportTypeByStudent").className =
+    "px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
+  document.getElementById("reportTypeByCourse").className =
+    "px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
+
+  document.getElementById(`reportType${type.charAt(0).toUpperCase() + type.slice(1)}`).className =
+    "px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+
+  generateReport()
+}
+
 function loadReportsTab() {
   const courseSelect = document.getElementById("reportCourse")
   courseSelect.innerHTML = '<option value="">Todos los cursos</option>'
@@ -858,6 +1051,8 @@ function loadReportsTab() {
   document.getElementById("reportDateStart").value = weekAgo
   document.getElementById("reportDateEnd").value = today
 
+  // Added default report type on load
+  setReportType("general")
   generateReport()
 }
 
@@ -876,7 +1071,17 @@ function generateReport() {
     attendanceRecords = attendanceRecords.filter((a) => a.courseId === courseId)
   }
 
-  displayReport(attendanceRecords, startDate, endDate)
+  switch (currentReportType) {
+    case "general":
+      displayReport(attendanceRecords, startDate, endDate)
+      break
+    case "byStudent":
+      displayReportByStudent(attendanceRecords, startDate, endDate)
+      break
+    case "byCourse":
+      displayReportByCourse(attendanceRecords, startDate, endDate)
+      break
+  }
 }
 
 function displayReport(records, startDate, endDate) {
@@ -984,6 +1189,157 @@ function displayReport(records, startDate, endDate) {
   container.innerHTML = html
 }
 
+function displayReportByStudent(records, startDate, endDate) {
+  const container = document.getElementById("reportContent")
+
+  if (records.length === 0) {
+    container.innerHTML =
+      '<p class="text-gray-500 text-center py-8">No hay datos para el rango de fechas seleccionado.</p>'
+    return
+  }
+
+  // Group by student
+  const byStudent = {}
+  records.forEach((record) => {
+    if (!byStudent[record.studentId]) {
+      byStudent[record.studentId] = {
+        presente: 0,
+        ausente: 0,
+        justificado: 0,
+        fugado: 0,
+        total: 0,
+      }
+    }
+    byStudent[record.studentId][record.status]++
+    byStudent[record.studentId].total++
+  })
+
+  let html = `
+    <div>
+      <h3 class="text-xl font-bold mb-4">Reporte por Estudiante</h3>
+      <p class="text-sm text-gray-600 mb-4">Desde ${startDate} hasta ${endDate}</p>
+      <table class="min-w-full border">
+        <thead class="bg-gray-100">
+          <tr>
+            <th class="border px-4 py-2 text-left">Estudiante</th>
+            <th class="border px-4 py-2 text-left">Curso</th>
+            <th class="border px-4 py-2 text-center">Total</th>
+            <th class="border px-4 py-2 text-center">Presentes</th>
+            <th class="border px-4 py-2 text-center">Ausentes</th>
+            <th class="border px-4 py-2 text-center">Justificados</th>
+            <th class="border px-4 py-2 text-center">Fugados</th>
+            <th class="border px-4 py-2 text-center">% Asistencia</th>
+          </tr>
+        </thead>
+        <tbody>
+  `
+
+  Object.keys(byStudent).forEach((studentId) => {
+    const student = db.students.find((s) => s.id === studentId)
+    const course = db.courses.find((c) => c.id === student?.courseId)
+    const stats = byStudent[studentId]
+    const percentage = ((stats.presente / stats.total) * 100).toFixed(1)
+
+    html += `
+      <tr>
+        <td class="border px-4 py-2">${student?.name || "Desconocido"}</td>
+        <td class="border px-4 py-2">${course?.name || "Sin curso"}</td>
+        <td class="border px-4 py-2 text-center font-semibold">${stats.total}</td>
+        <td class="border px-4 py-2 text-center text-green-600">${stats.presente}</td>
+        <td class="border px-4 py-2 text-center text-red-600">${stats.ausente}</td>
+        <td class="border px-4 py-2 text-center text-yellow-600">${stats.justificado}</td>
+        <td class="border px-4 py-2 text-center text-orange-600">${stats.fugado}</td>
+        <td class="border px-4 py-2 text-center">
+          <span class="px-2 py-1 rounded text-sm ${percentage >= 80 ? "bg-green-100 text-green-800" : percentage >= 60 ? "bg-yellow-100 text-yellow-800" : "bg-red-100 text-red-800"}">
+            ${percentage}%
+          </span>
+        </td>
+      </tr>
+    `
+  })
+
+  html += "</tbody></table></div>"
+  container.innerHTML = html
+}
+
+function displayReportByCourse(records, startDate, endDate) {
+  const container = document.getElementById("reportContent")
+
+  if (records.length === 0) {
+    container.innerHTML =
+      '<p class="text-gray-500 text-center py-8">No hay datos para el rango de fechas seleccionado.</p>'
+    return
+  }
+
+  // Group by course
+  const byCourse = {}
+  records.forEach((record) => {
+    if (!byCourse[record.courseId]) {
+      byCourse[record.courseId] = {
+        presente: 0,
+        ausente: 0,
+        justificado: 0,
+        fugado: 0,
+        total: 0,
+      }
+    }
+    byCourse[record.courseId][record.status]++
+    byCourse[record.courseId].total++
+  })
+
+  let html = `
+    <div>
+      <h3 class="text-xl font-bold mb-4">Reporte por Curso</h3>
+      <p class="text-sm text-gray-600 mb-4">Desde ${startDate} hasta ${endDate}</p>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+  `
+
+  Object.keys(byCourse).forEach((courseId) => {
+    const course = db.courses.find((c) => c.id === courseId)
+    const stats = byCourse[courseId]
+    const percentage = ((stats.presente / stats.total) * 100).toFixed(1)
+
+    html += `
+      <div class="border rounded-lg p-4">
+        <h4 class="font-bold text-lg mb-3">${course?.name || "Sin curso"}</h4>
+        <div class="space-y-2">
+          <div class="flex justify-between">
+            <span>Total registros:</span>
+            <span class="font-semibold">${stats.total}</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-green-600">Presentes:</span>
+            <span class="font-semibold text-green-600">${stats.presente}</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-red-600">Ausentes:</span>
+            <span class="font-semibold text-red-600">${stats.ausente}</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-yellow-600">Justificados:</span>
+            <span class="font-semibold text-yellow-600">${stats.justificado}</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-orange-600">Fugados:</span>
+            <span class="font-semibold text-orange-600">${stats.fugado}</span>
+          </div>
+          <div class="border-t pt-2 mt-2">
+            <div class="flex justify-between items-center">
+              <span class="font-semibold">% Asistencia:</span>
+              <span class="px-3 py-1 rounded ${percentage >= 80 ? "bg-green-100 text-green-800" : percentage >= 60 ? "bg-yellow-100 text-yellow-800" : "bg-red-100 text-red-800"}">
+                ${percentage}%
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    `
+  })
+
+  html += "</div></div>"
+  container.innerHTML = html
+}
+
 function printReport() {
   window.print()
 }
@@ -999,7 +1355,7 @@ function exportReportCSV() {
   }
 
   if (records.length === 0) {
-    alert("No hay datos para exportar.")
+    showToast("No hay datos para exportar.", "warning")
     return
   }
 
@@ -1020,6 +1376,7 @@ function exportReportCSV() {
   })
 
   downloadFile(csv, `reporte_asistencia_${startDate}_${endDate}.csv`, "text/csv")
+  showToast("Reporte exportado exitosamente.", "success")
 }
 
 // Export/Import Functions
@@ -1030,10 +1387,12 @@ function exportData() {
     schedules: db.schedules,
     attendance: db.attendance,
     exportDate: new Date().toISOString(),
+    version: "1.0",
   }
 
   const json = JSON.stringify(data, null, 2)
   downloadFile(json, `backup_asistencia_${new Date().toISOString().split("T")[0]}.json`, "application/json")
+  showToast("Datos exportados exitosamente.", "success")
 }
 
 function importData() {
@@ -1049,7 +1408,7 @@ function importData() {
       try {
         const data = JSON.parse(event.target.result)
 
-        if (confirm("¿Está seguro de importar estos datos? Esto reemplazará todos los datos actuales.")) {
+        if (confirmAction("¿Está seguro de importar estos datos? Esto reemplazará todos los datos actuales.")) {
           if (data.students) db.students = data.students
           if (data.courses) db.courses = data.courses
           if (data.schedules) db.schedules = data.schedules
@@ -1060,11 +1419,11 @@ function importData() {
           db.save("schedules", db.schedules)
           db.save("attendance", db.attendance)
 
-          alert("Datos importados exitosamente.")
-          location.reload()
+          showToast("Datos importados exitosamente.", "success")
+          setTimeout(() => location.reload(), 1500)
         }
       } catch (error) {
-        alert("Error al importar los datos. Verifique que el archivo sea válido.")
+        showToast("Error al importar los datos. Verifique que el archivo sea válido.", "error")
         console.error(error)
       }
     }
@@ -1073,6 +1432,24 @@ function importData() {
   }
 
   input.click()
+}
+
+function clearAllData() {
+  if (
+    confirmAction(
+      "¿Está COMPLETAMENTE SEGURO de eliminar TODOS los datos del sistema? Esta acción NO se puede deshacer.",
+    )
+  ) {
+    if (
+      confirmAction(
+        "Última confirmación: ¿Realmente desea eliminar todos los estudiantes, cursos, horarios y registros de asistencia?",
+      )
+    ) {
+      localStorage.clear()
+      showToast("Todos los datos han sido eliminados.", "success")
+      setTimeout(() => location.reload(), 1500)
+    }
+  }
 }
 
 function downloadFile(content, filename, contentType) {
@@ -1090,4 +1467,5 @@ function downloadFile(content, filename, contentType) {
 // Initialize app
 document.addEventListener("DOMContentLoaded", () => {
   showTab("dashboard")
+  setInterval(updateCurrentPeriod, 60000)
 })
