@@ -15,7 +15,6 @@ import type { Course, Student, Schedule } from "@/lib/types"
 
 interface AttendanceRow {
   studentId: string
-  listNumber: number
   fullName: string
   isPresent: boolean
   observation: string
@@ -79,8 +78,7 @@ export function AttendanceForm() {
         setAttendanceData(
           data.data.map((student: Student) => ({
             studentId: student._id!,
-            listNumber: student.listNumber,
-            fullName: student.fullName,
+            fullName: `${student.firstName} ${student.lastName}`,
             isPresent: false,
             observation: "",
           })),
@@ -192,7 +190,7 @@ export function AttendanceForm() {
         <div className="space-y-1">
           {currentSchedules.map((schedule, idx) => (
             <div key={idx} className="text-sm">
-              <span className="font-medium">{schedule.courseCode}</span> - {schedule.subject} ({schedule.startTime} -{" "}
+              <span className="font-medium">{schedule.courseName}</span> - {schedule.subject} ({schedule.startTime} -{" "}
               {schedule.endTime})
             </div>
           ))}
@@ -246,33 +244,36 @@ export function AttendanceForm() {
               <table className="w-full">
                 <thead className="bg-muted">
                   <tr>
-                    <th className="px-4 py-3 text-left text-sm font-semibold">N°</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold">Código</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold">Nombre Completo</th>
                     <th className="px-4 py-3 text-center text-sm font-semibold">Presente</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold">Observación</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {attendanceData.map((row, index) => (
-                    <tr key={row.studentId} className="hover:bg-muted/50">
-                      <td className="px-4 py-3 text-sm">{row.listNumber}</td>
-                      <td className="px-4 py-3 text-sm font-medium">{row.fullName}</td>
-                      <td className="px-4 py-3 text-center">
-                        <Checkbox
-                          checked={row.isPresent}
-                          onCheckedChange={(checked) => handlePresentChange(index, checked as boolean)}
-                        />
-                      </td>
-                      <td className="px-4 py-3">
-                        <Textarea
-                          value={row.observation}
-                          onChange={(e) => handleObservationChange(index, e.target.value)}
-                          placeholder="Observaciones..."
-                          className="min-h-[60px] text-sm"
-                        />
-                      </td>
-                    </tr>
-                  ))}
+                  {attendanceData.map((row, index) => {
+                    const student = students[index]
+                    return (
+                      <tr key={row.studentId} className="hover:bg-muted/50">
+                        <td className="px-4 py-3 text-sm">{student?.studentCode}</td>
+                        <td className="px-4 py-3 text-sm font-medium">{row.fullName}</td>
+                        <td className="px-4 py-3 text-center">
+                          <Checkbox
+                            checked={row.isPresent}
+                            onCheckedChange={(checked) => handlePresentChange(index, checked as boolean)}
+                          />
+                        </td>
+                        <td className="px-4 py-3">
+                          <Textarea
+                            value={row.observation}
+                            onChange={(e) => handleObservationChange(index, e.target.value)}
+                            placeholder="Observaciones..."
+                            className="min-h-[60px] text-sm"
+                          />
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>

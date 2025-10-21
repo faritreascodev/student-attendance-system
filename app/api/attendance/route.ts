@@ -1,44 +1,42 @@
 import { NextResponse } from "next/server"
-import { getDatabase } from "@/lib/db"
+import { AttendanceModel } from "@/lib/models/attendance-model"
+import { initializeData } from "@/lib/db"
 import type { AttendanceSubmission } from "@/lib/types"
 
 export async function POST(request: Request) {
   try {
+    initializeData()
     const body: AttendanceSubmission = await request.json()
-    const { courseCode, date, time, records } = body
+    const { courseId, date, period, records } = body
 
-    if (!courseCode || !date || !time || !records || records.length === 0) {
+    if (!courseId || !date || period === undefined || !records || records.length === 0) {
       return NextResponse.json({ success: false, error: "Datos incompletos" }, { status: 400 })
     }
 
-    const db = await getDatabase()
-    const attendanceCollection = db.collection("attendance")
+    const savedRecords = []
+    for (const record of records) {
+      const attendanceRecord = {
+        studentId: record.studentId,
+        courseId,
+        date,
+        period,
+        status: record.status,
+        observation: record.observation || "",
+      }
 
-    // Preparar los registros de asistencia
-    const attendanceRecords = records.map((record) => ({
-      studentId: record.studentId,
-      courseCode,
-      attendanceDate: date,
-      attendanceTime: time,
-      isPresent: record.isPresent,
-      observation: record.observation || "",
-      createdAt: new Date(),
-    }))
+      const validation = AttendanceModel.validate(attendanceRecord)
+      if (!validation.valid) {
+        return NextResponse.json({ success: false, errors: validation.errors }, { status: 400 })
+      }
 
-    // Eliminar registros existentes para la misma fecha y estudiantes
-    const studentIds = records.map((r) => r.studentId)
-    await attendanceCollection.deleteMany({
-      studentId: { $in: studentIds },
-      attendanceDate: date,
-    })
-
-    // Insertar nuevos registros
-    const result = await attendanceCollection.insertMany(attendanceRecords)
+      const saved = AttendanceModel.create(attendanceRecord)
+      savedRecords.push(saved)
+    }
 
     return NextResponse.json({
       success: true,
       message: "Asistencia guardada correctamente",
-      insertedCount: result.insertedCount,
+      data: savedRecords,
     })
   } catch (error) {
     console.error("[v0] Error saving attendance:", error)
@@ -48,22 +46,20 @@ export async function POST(request: Request) {
 
 export async function GET(request: Request) {
   try {
+    initializeData()
     const { searchParams } = new URL(request.url)
-    const courseCode = searchParams.get("courseCode")
+    const courseId = searchParams.get("courseId")
     const date = searchParams.get("date")
+    const studentId = searchParams.get("studentId")
+    const period = searchParams.get("period")
 
-    const db = await getDatabase()
-    const query: any = {}
+    const filters: any = {}
+    if (courseId) filters.courseId = courseId
+    if (date) filters.date = date
+    if (studentId) filters.studentId = studentId
+    if (period) filters.period = Number.parseInt(period)
 
-    if (courseCode) query.courseCode = courseCode
-    if (date) query.attendanceDate = date
-
-    const attendance = await db
-      .collection("attendance")
-      .find(query)
-      .sort({ attendanceDate: -1, attendanceTime: -1 })
-      .toArray()
-
+    const attendance = AttendanceModel.getAll(filters)
     return NextResponse.json({ success: true, data: attendance })
   } catch (error) {
     console.error("[v0] Error fetching attendance:", error)
